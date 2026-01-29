@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import plotly.graph_objects as go
 from api_client_geo import GeotechnicalAPIClient
 from config_app import API_BASE_URL, APP_TITLE, APP_VERSION
+import os
 
 # Page configuration
 st.set_page_config(
@@ -136,10 +138,7 @@ st.title(APP_TITLE)
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    # File menu simulation
-    with st.expander("File", expanded=False):
-        st.write("Opzioni grafiche")
-    
+   
     st.markdown('<div class="section-header">Dati geometrici</div>', unsafe_allow_html=True)
     
     # Geometric data inputs
@@ -206,12 +205,12 @@ with col1:
     
     # Display info based on SFd value
     if st.session_state.sfd_calculated and st.session_state.sfd_value is not None:
-        if st.session_state.sfd_value > 1:
-            st.info("SFd>1: una frana potrebbe verificarsi per perturazione della stazione (usare parametri saturi)")
+        if st.session_state.sfd_value >= 1:
+            st.info("SFd>=1: una frana potrebbe verificarsi per perturazione della stazione (usare parametri saturi)")
         else:
-            st.info("SFd≤1: una frana potrebbe verificarsi per innalzamento della falda (usare parametri non saturi)")
+            st.info("SFd<1: una frana potrebbe verificarsi per innalzamento della falda (usare parametri non saturi)")
     else:
-        st.info("SFd>1 una frana potrebbe verificarsi per perturazione della stazione")
+        st.info("SFd>=1 una frana potrebbe verificarsi per perturazione della stazione")
         st.info("SFd<1 una frana potrebbe verificarsi per innalzamento della falda")
     
     # Saturated soil section - enabled when SFd > 1
@@ -221,7 +220,7 @@ with col1:
     st.markdown(f'<div class="{header_class}">Caratterizzazione idraulica del terreno saturo</div>', unsafe_allow_html=True)
     
     if not saturated_enabled:
-        st.info("ℹ️ Questa sezione sarà abilitata quando SFd > 1")
+        st.info("ℹ️ Questa sezione sarà abilitata quando SFd >= 1")
     
     col_label6, col_input6, col_unit6 = st.columns([3, 1, 0.5])
     with col_label6:
@@ -264,14 +263,14 @@ with col1:
     with col_unit10:
         st.text("-")
     
-    # Unsaturated soil section - enabled when SFd <= 1
+    # Unsaturated soil section - enabled when SFd < 1
     unsaturated_enabled = st.session_state.enable_unsaturated
     
     header_class = "section-header" if unsaturated_enabled else "section-header disabled"
     st.markdown(f'<div class="{header_class}">Caratterizzazione idraulica del terreno parzialmente saturo</div>', unsafe_allow_html=True)
     
     if not unsaturated_enabled:
-        st.info("ℹ️ Questa sezione sarà abilitata quando SFd ≤ 1")
+        st.info("ℹ️ Questa sezione sarà abilitata quando SFd < 1")
     
     col_label11, col_input11, col_unit11 = st.columns([3, 1, 0.5])
     with col_label11:
@@ -344,18 +343,18 @@ with col1:
             
             # Check if appropriate section has been filled
             if sfd_val <= 1 and not unsaturated_enabled:
-                st.error("Compilare i parametri del terreno parzialmente saturo (SFd ≤ 1)")
+                st.error("Compilare i parametri del terreno parzialmente saturo (SFd < 1)")
             elif sfd_val > 1 and not saturated_enabled:
-                st.error("Compilare i parametri del terreno saturo (SFd > 1)")
+                st.error("Compilare i parametri del terreno saturo (SFd >= 1)")
             else:
                 # Prepare parameters for API call
                 with st.spinner("Calcolo in corso..."):
                     try:
                         # Determine prisl based on enabled section
-                        prisl = "unsaturated" if sfd_val <= 1 else "saturated"
+                        prisl = "unsaturated" if sfd_val < 1 else "saturated"
                         
                         # Call compute API
-                        if sfd_val <= 1:
+                        if sfd_val < 1:
                             # Use unsaturated parameters
                             result = api_client.calculate_compute(
                                 c=c_value,
@@ -394,81 +393,271 @@ with col1:
                                 n=n_value
                             )
                         
-                        if result.get('success', False):
+                        if not result.get('success', True):
+                            st.error(f"❌ Errore nel calcolo: {result.get('error', 'Unknown error')}")
+                        else:
                             st.session_state['calculation_done'] = True
                             st.session_state['results'] = result
                             st.success("✅ Calcolo completato con successo!")
                             st.rerun()
-                        else:
-                            st.error(f"❌ Errore nel calcolo: {result.get('error', 'Unknown error')}")
                     
                     except Exception as e:
                         st.error(f"❌ Errore durante il calcolo: {str(e)}")
 
 with col2:
     st.markdown('<div class="section-header">Info calcolo</div>', unsafe_allow_html=True)
-    
+
     # Display calculation info
     if 'calculation_done' in st.session_state and st.session_state['calculation_done']:
         results = st.session_state.get('results', {})
-        
+        sfd_value = st.session_state.get('sfd_value', None)
+
         st.success("✓ Calcolo completato con successo")
-        
-        # Create tabs for different result types
-        tab1, tab2, tab3 = st.tabs(["Risultati numerici", "Grafici", "Dettagli"])
-        
-        with tab1:
-            st.subheader("Risultati del calcolo")
-            
-            # Display main results
-            col_res1, col_res2 = st.columns(2)
-            
-            with col_res1:
-                if 'p' in results:
-                    st.metric("p", f"{results['p']:.4f}" if isinstance(results['p'], (int, float)) else str(results['p']))
-                
-                if 'I' in results:
-                    st.metric("I", f"{results['I']:.4f}" if isinstance(results['I'], (int, float)) else str(results['I']))
-            
-            with col_res2:
-                if 'Uc' in results:
-                    st.metric("Uc", f"{results['Uc']:.4f}" if isinstance(results['Uc'], (int, float)) else str(results['Uc']))
-                
-                if 'H_Max' in results:
-                    st.metric("H_Max", f"{results['H_Max']:.4f}" if isinstance(results['H_Max'], (int, float)) else str(results['H_Max']))
-        
-        with tab2:
-            st.subheader("Grafici dei risultati")
-            
-            if 'plot' in results and results['plot']:
-                plot_data = results['plot']
-                
-                # Check if plot data is available
-                if isinstance(plot_data, dict):
-                    st.write("Dati del grafico disponibili:")
-                    
-                    # Display plot data structure
-                    for key, value in plot_data.items():
-                        with st.expander(f"📊 {key}"):
-                            if isinstance(value, list):
-                                st.write(f"Numero di punti: {len(value)}")
-                                if len(value) > 0:
-                                    st.line_chart(value)
-                            elif isinstance(value, dict):
-                                st.json(value)
-                            else:
-                                st.write(value)
+
+        # Check if SFD < 1 for tab layout
+        if sfd_value is not None and sfd_value < 1:
+            # Tabs layout for SFD < 1
+            tab1, tab2 = st.tabs(["Risultati numerici", "Grafici"])
+
+            with tab1:
+                st.subheader("Risultati del calcolo")
+
+                # Display main results
+                col_res1, col_res2 = st.columns(2)
+
+                with col_res1:
+                    if 'p' in results:
+                        p_value = results['p']
+                        st.metric("Potenziale di infiltrazione", f"{p_value:.4f}" if isinstance(p_value, (int, float)) else str(p_value))
+
+                    if 'I' in results:
+                        i_value = results['I']
+                        st.metric("Infiltrazione", f"{i_value:.4f}" if isinstance(i_value, (int, float)) else str(i_value))
+
+                with col_res2:
+                    # Display stability status
+                    if 'plot' in results and results['plot']:
+                        plot_data = results['plot']
+                        if 'critical_curve' in plot_data and 'series' in plot_data['critical_curve']:
+                            if 'R1' in plot_data['critical_curve']['series']:
+                                r1_data = plot_data['critical_curve']['series']['R1']
+                                is_stable = r1_data.get('stable', False)
+
+                                if is_stable:
+                                    st.success("**PENDIO STABILE**")
+                                else:
+                                    st.error("**PENDIO INSTABILE**")
+
+            with tab2:
+                st.subheader("Grafici dei risultati")
+
+                if 'plot' in results and results['plot']:
+                    plot_data = results['plot']
+
+                    # Check for critical_curve data structure
+                    if 'critical_curve' in plot_data:
+                        cc_data = plot_data['critical_curve']
+
+                        # Create figure with both critical curve and R1 point
+                        fig = go.Figure()
+
+                        # Add critical_curve series
+                        if 'series' in cc_data and 'critical_curve' in cc_data['series']:
+                            cc_series = cc_data['series']['critical_curve']
+                            if 'x' in cc_series and 'y' in cc_series:
+                                fig.add_trace(go.Scatter(
+                                    x=cc_series['x'],
+                                    y=cc_series['y'],
+                                    mode='lines',
+                                    name='Curva Critica',
+                                    line=dict(color='blue', width=2)
+                                ))
+
+                        # Add R1 point
+                        if 'series' in cc_data and 'R1' in cc_data['series']:
+                            r1_series = cc_data['series']['R1']
+                            if 'x' in r1_series and 'y' in r1_series:
+                                is_stable = r1_series.get('stable', False)
+                                fig.add_trace(go.Scatter(
+                                    x=r1_series['x'],
+                                    y=r1_series['y'],
+                                    mode='markers',
+                                    name='R1',
+                                    marker=dict(
+                                        color='green' if is_stable else 'red',
+                                        size=12,
+                                        symbol='circle'
+                                    )
+                                ))
+
+                        # Update layout with axis limits
+                        x_label = cc_data.get('xAxes', 'x')
+                        y_label = cc_data.get('yAxes', 'y')
+                        x_max = cc_data.get('xMax', 0)
+                        y_max = cc_data.get('yMax', 0)
+
+                        # Calculate axis limits from data if xMax/yMax are not set
+                        if x_max == 0:
+                            all_x = []
+                            if 'critical_curve' in cc_data['series'] and 'x' in cc_data['series']['critical_curve']:
+                                all_x.extend(cc_data['series']['critical_curve']['x'])
+                            if 'R1' in cc_data['series'] and 'x' in cc_data['series']['R1']:
+                                all_x.extend(cc_data['series']['R1']['x'])
+                            if all_x:
+                                x_max = max(all_x) * 1.1  # Add 10% padding
+
+                        if y_max == 0:
+                            all_y = []
+                            if 'critical_curve' in cc_data['series'] and 'y' in cc_data['series']['critical_curve']:
+                                all_y.extend(cc_data['series']['critical_curve']['y'])
+                            if 'R1' in cc_data['series'] and 'y' in cc_data['series']['R1']:
+                                all_y.extend(cc_data['series']['R1']['y'])
+                            if all_y:
+                                y_max = max(all_y) * 1.1  # Add 10% padding
+
+                        layout_config = {
+                            'xaxis_title': x_label,
+                            'yaxis_title': y_label,
+                            'height': 500,
+                            'hovermode': 'closest',
+                            'showlegend': True
+                        }
+
+                        if x_max > 0:
+                            layout_config['xaxis'] = dict(range=[0, x_max], title=x_label)
+                        if y_max > 0:
+                            layout_config['yaxis'] = dict(range=[0, y_max], title=y_label)
+
+                        fig.update_layout(**layout_config)
+
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Dati del grafico non disponibili")
                 else:
-                    st.info("Dati del grafico non disponibili in formato standard")
-                    st.write(plot_data)
-            else:
-                st.info("Nessun dato grafico disponibile")
-        
-        with tab3:
-            st.subheader("Dettagli completi")
-            
-            # Display full response
-            st.json(results)
+                    st.info("Nessun dato grafico disponibile")
+
+        else:
+            # Standard tabs layout for SFD >= 1 or when SFD not available
+            tab1, tab2 = st.tabs(["Risultati numerici", "Grafici"])
+
+            with tab1:
+                st.subheader("Risultati del calcolo")
+
+                # Display main results
+                col_res1, col_res2 = st.columns(2)
+
+                with col_res1:
+                    if 'p' in results:
+                        p_value = results['p']
+                        st.metric("Potenziale di infiltrazione", f"{p_value:.4f}" if isinstance(p_value, (int, float)) else str(p_value))
+
+                    if 'I' in results:
+                        i_value = results['I']
+                        st.metric("Infiltrazione", f"{i_value:.4f}" if isinstance(i_value, (int, float)) else str(i_value))
+
+                with col_res2:
+                    # Display stability status
+                    if 'plot' in results and results['plot']:
+                        plot_data = results['plot']
+                        if 'critical_curve' in plot_data and 'series' in plot_data['critical_curve']:
+                            if 'R1' in plot_data['critical_curve']['series']:
+                                r1_data = plot_data['critical_curve']['series']['R1']
+                                is_stable = r1_data.get('stable', False)
+
+                                if is_stable:
+                                    st.success("**PENDIO STABILE**")
+                                else:
+                                    st.error("**PENDIO INSTABILE**")
+
+            with tab2:
+                st.subheader("Grafici dei risultati")
+
+                if 'plot' in results and results['plot']:
+                    plot_data = results['plot']
+
+                    # Check for critical_curve data structure
+                    if 'critical_curve' in plot_data:
+                        cc_data = plot_data['critical_curve']
+
+                        # Create figure with both critical curve and R1 point
+                        fig = go.Figure()
+
+                        # Add critical_curve series
+                        if 'series' in cc_data and 'critical_curve' in cc_data['series']:
+                            cc_series = cc_data['series']['critical_curve']
+                            if 'x' in cc_series and 'y' in cc_series:
+                                fig.add_trace(go.Scatter(
+                                    x=cc_series['x'],
+                                    y=cc_series['y'],
+                                    mode='lines',
+                                    name='Curva Critica',
+                                    line=dict(color='blue', width=2)
+                                ))
+
+                        # Add R1 point
+                        if 'series' in cc_data and 'R1' in cc_data['series']:
+                            r1_series = cc_data['series']['R1']
+                            if 'x' in r1_series and 'y' in r1_series:
+                                is_stable = r1_series.get('stable', False)
+                                fig.add_trace(go.Scatter(
+                                    x=r1_series['x'],
+                                    y=r1_series['y'],
+                                    mode='markers',
+                                    name='R1',
+                                    marker=dict(
+                                        color='green' if is_stable else 'red',
+                                        size=12,
+                                        symbol='circle'
+                                    )
+                                ))
+
+                        # Update layout with axis limits
+                        x_label = cc_data.get('xAxes', 'x')
+                        y_label = cc_data.get('yAxes', 'y')
+                        x_max = cc_data.get('xMax', 0)
+                        y_max = cc_data.get('yMax', 0)
+                        os.write(1, f"x_max = {x_max}".encode())
+                        os.write(1, f"y_max = {y_max}".encode())
+
+                        # Calculate axis limits from data if xMax/yMax are not set
+                        if x_max == 0:
+                            all_x = []
+                            if 'critical_curve' in cc_data['series'] and 'x' in cc_data['series']['critical_curve']:
+                                all_x.extend(cc_data['series']['critical_curve']['x'])
+                            if 'R1' in cc_data['series'] and 'x' in cc_data['series']['R1']:
+                                all_x.extend(cc_data['series']['R1']['x'])
+                            if all_x:
+                                x_max = max(all_x) * 1.1  # Add 10% padding
+
+                        if y_max == 0:
+                            all_y = []
+                            if 'critical_curve' in cc_data['series'] and 'y' in cc_data['series']['critical_curve']:
+                                all_y.extend(cc_data['series']['critical_curve']['y'])
+                            if 'R1' in cc_data['series'] and 'y' in cc_data['series']['R1']:
+                                all_y.extend(cc_data['series']['R1']['y'])
+                            if all_y:
+                                y_max = max(all_y) * 1.1  # Add 10% padding
+
+                        layout_config = {
+                            'xaxis_title': x_label,
+                            'yaxis_title': y_label,
+                            'height': 500,
+                            'hovermode': 'closest',
+                            'showlegend': True
+                        }
+
+                        if x_max > 0:
+                            layout_config['xaxis'] = dict(range=[0, x_max], title=x_label)
+                        if y_max > 0:
+                            layout_config['yaxis'] = dict(range=[0, y_max], title=y_label)
+
+                        fig.update_layout(**layout_config)
+
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Dati del grafico non disponibili")
+                else:
+                    st.info("Nessun dato grafico disponibile")
     else:
         st.info("Inserire i parametri e premere 'Calcola' per visualizzare i risultati")
 
