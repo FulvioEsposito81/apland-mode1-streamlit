@@ -4,7 +4,7 @@ Configuration settings for the Geotechnical Application
 import os
 
 # API Configuration
-API_BASE_URL = os.environ("API_URL", "http://localhost:8000")  # Change this to your API server URL
+API_BASE_URL = os.environ.get("API_URL", "http://localhost:8000")  # Change this to your API server URL
 
 # API Endpoints
 ENDPOINTS = {
