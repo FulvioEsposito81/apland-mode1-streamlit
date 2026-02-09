@@ -226,7 +226,7 @@ with col1:
     with col_label6:
         st.text("Conducibilità idraulica")
     with col_input6:
-        k_sat_value = st.number_input("k", value=0.0, step=1e-10, label_visibility="collapsed", key="k_sat", disabled=not saturated_enabled)
+        k_sat_value = st.number_input("k", format="%.2e", value=0.0, step=1e-10, label_visibility="collapsed", key="k_sat", disabled=not saturated_enabled)
     with col_unit6:
         st.text("m/s")
     
@@ -276,7 +276,7 @@ with col1:
     with col_label11:
         st.text("Conducibilità idraulica")
     with col_input11:
-        k_unsat_value = st.number_input("k", value=0.0, step=1e-10, label_visibility="collapsed", key="k_unsat", disabled=not unsaturated_enabled)
+        k_unsat_value = st.number_input("k", format="%.2e", value=0.0, step=1e-10, label_visibility="collapsed", key="k_unsat", disabled=not unsaturated_enabled)
     with col_unit11:
         st.text("m/s")
     
@@ -301,7 +301,7 @@ with col1:
     with col_label14:
         st.text("Coefficiente di ritenzione idrica")
     with col_input14:
-        mw_value = st.number_input("m_w", value=0.0, step=1e-10, label_visibility="collapsed", key="mw", disabled=not unsaturated_enabled)
+        mw_value = st.number_input("m_w", format="%.2e", value=0.0, step=1e-10, label_visibility="collapsed", key="mw", disabled=not unsaturated_enabled)
     with col_unit14:
         st.text("kPa⁻¹")
     
