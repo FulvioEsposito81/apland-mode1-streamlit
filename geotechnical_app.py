@@ -235,7 +235,7 @@ with col1:
         st.text("Potenziale di infiltrazione")
         st.caption("(Ipputare un valore nullo per usare p=k(cosα))")
     with col_input7:
-        p_value = st.number_input("p", value=0.0, step=1e-10, label_visibility="collapsed", key="p", disabled=not saturated_enabled)
+        p_value = st.number_input("p", format="%.2e", value=0.0, step=1e-10, label_visibility="collapsed", key="p", disabled=not saturated_enabled)
     with col_unit7:
         st.text("mm/day")
     
